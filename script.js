@@ -13,6 +13,16 @@ let camera = 0;
 const particles = [];
 const stars = [];
 const sparkles = [];
+const floatingTexts = [];
+
+const textMessages = [
+    "Happy Birthday",
+    "I Love You",
+    "Stay Magical",
+    "You Are My Galaxy",
+    "Forever Shine",
+    "My Favorite Star"
+];
 
 function random(min, max) {
     return Math.random() * (max - min) + min;
@@ -20,6 +30,11 @@ function random(min, max) {
 
 function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
+}
+
+function smoothStep(value) {
+    const x = clamp(value, 0, 1);
+    return x * x * (3 - 2 * x);
 }
 
 function heartPoint(t) {
@@ -45,6 +60,7 @@ function resizeCanvas() {
     createStars();
     createSparkles();
     createHeart();
+    createFloatingTexts();
 }
 
 function createHeart() {
@@ -99,6 +115,30 @@ function createSparkles() {
             speed: random(0.15, 0.45)
         });
     }
+}
+
+function createFloatingTexts() {
+    floatingTexts.length = 0;
+
+    const safeRadius = Math.min(width, height) * 0.34;
+    const verticalSquash = 0.72;
+    const startAngle = -Math.PI / 2.35;
+
+    textMessages.forEach((message, index) => {
+        const textAngle = startAngle + (Math.PI * 2 / textMessages.length) * index;
+        const radiusOffset = index % 2 === 0 ? 1 : 0.84;
+
+        floatingTexts.push({
+            message,
+            baseX: Math.cos(textAngle) * safeRadius * radiusOffset,
+            baseY: Math.sin(textAngle) * safeRadius * verticalSquash * radiusOffset,
+            delay: index * 0.42,
+            duration: 2.4,
+            phase: index * 1.37,
+            jitter: 1.4 + (index % 3) * 0.45,
+            fontSize: clamp(width * 0.018, 15, 23)
+        });
+    });
 }
 
 function drawBackground() {
@@ -158,36 +198,35 @@ function drawHeart(time) {
     ctx.restore();
 }
 
-function drawRing(time) {
-    if (width < 480) {
-        return;
-    }
-
-    const text = "  HAPPY BIRTHDAY • I LOVE YOU  ";
-    const radius = Math.min(width, height) * 0.31;
-
+function drawFloatingTexts(time) {
     ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.rotate(angle * 0.55);
-    ctx.font = `700 ${clamp(width * 0.018, 16, 24)}px Arial`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
+    ctx.globalCompositeOperation = "lighter";
     ctx.shadowBlur = 18;
-    ctx.shadowColor = "#ff0f5f";
+    ctx.shadowColor = "#ff4d9d";
 
-    for (let i = 0; i < text.length; i++) {
-        const letterAngle = (Math.PI * 2 / text.length) * i;
-        const pulse = Math.sin(time + i * 0.4) * 0.08 + 1;
-        const x = Math.cos(letterAngle) * radius * pulse;
-        const y = Math.sin(letterAngle) * radius * pulse;
+    floatingTexts.forEach((text) => {
+        const cycle = reduceMotion ? 1 : 7.5;
+        const localTime = (time - text.delay + cycle) % cycle;
+        const fadeIn = smoothStep(localTime / text.duration);
+        const fadeOut = smoothStep((cycle - localTime) / 1.8);
+        const opacity = clamp(fadeIn * fadeOut, 0, 1);
+        const lift = (1 - fadeIn) * 34;
+        const float = Math.sin(time * 0.9 + text.phase) * 4;
+        const jitterX = Math.sin(time * 7.5 + text.phase) * text.jitter;
+        const jitterY = Math.cos(time * 6.2 + text.phase) * text.jitter * 0.7;
+        const orbit = Math.sin(time * 0.35 + text.phase) * 8;
+        const x = centerX + text.baseX + jitterX + orbit;
+        const y = centerY + text.baseY + lift + float + jitterY;
 
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate(letterAngle + Math.PI / 2);
-        ctx.fillStyle = "rgba(255, 180, 205, 0.9)";
-        ctx.fillText(text[i], 0, 0);
-        ctx.restore();
-    }
+        ctx.font = `700 ${text.fontSize}px Arial`;
+        ctx.fillStyle = `rgba(255, 222, 240, ${opacity})`;
+        ctx.strokeStyle = `rgba(184, 92, 255, ${opacity * 0.42})`;
+        ctx.lineWidth = 3;
+        ctx.strokeText(text.message, x, y);
+        ctx.fillText(text.message, x, y);
+    });
 
     ctx.restore();
 }
@@ -228,7 +267,7 @@ function animate() {
     drawStars(time);
     drawSparkles(time);
     drawHeart(time);
-    drawRing(time);
+    drawFloatingTexts(time);
 
     requestAnimationFrame(animate);
 }
