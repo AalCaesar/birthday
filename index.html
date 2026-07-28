@@ -1,25 +1,64 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Galaxy Gallery</title>
 
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
 
-<title>3D Heart</title>
+    <!-- CSS -->
+    <link rel="stylesheet" href="style.css">
 
-<link rel="stylesheet" href="style.css">
+    <!-- GSAP for Animations -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
 
+    <!-- Three.js (Import map for ES modules) -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/"
+            }
+        }
+    </script>
 </head>
-
 <body>
 
-<canvas id="canvas"></canvas>
+    <!-- 3D Canvas Container -->
+    <div id="canvas-container"></div>
 
-<div class="title">
-    <h1>I LOVE YOU ❤️</h1>
-</div>
+    <!-- Phase 1: Intro UI Overlay -->
+    <div id="intro-overlay" class="overlay">
+        <div class="glass-card">
+            <h1 class="title">Galaxy Gallery</h1>
+            
+            <div class="image-placeholder">
+                <!-- Replace src with your actual bears GIF -->
+                <img src="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcGpmOXF1bHhwbHVyeTFnZHk0ZXZzZTcyM3ByYzRwZnNidjdyMnhkaiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Lpw1K9zETuh7KffjQX/giphy.gif" alt="Cute Bears GIF" class="bears-gif" onerror="this.src='photo1.jpg'">
+            </div>
 
-<script src="script.js"></script>
+            <p class="subtitle">PARA MI PRINCESITA</p>
 
+            <button id="btn-iniciar" class="glow-button">INICIAR</button>
+        </div>
+    </div>
+
+    <!-- Image Lightbox Modal -->
+    <div id="image-modal" class="modal hidden">
+        <div class="modal-backdrop" id="modal-backdrop"></div>
+        <div class="modal-content glass-card">
+            <button id="close-modal" class="close-btn">&times;</button>
+            <div class="modal-image-container">
+                <img id="modal-image" src="" alt="Full size photo">
+            </div>
+        </div>
+    </div>
+
+    <!-- Main JavaScript -->
+    <script type="module" src="script.js"></script>
 </body>
 </html>
