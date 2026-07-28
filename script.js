@@ -11,6 +11,15 @@ let textRingGroup, photoBubbles = [];
 let isWarping = false;
 let isGalaxyVisible = false;
 
+// Shooting Stars
+let shootingStars = [];
+let lastTime = 0;
+
+// Hover state
+let hoveredBubble = null;
+let globalSpeedMult = 1.0;
+let targetGlobalSpeedMult = 1.0;
+
 // Raycaster globals
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
@@ -65,6 +74,7 @@ function init() {
 
     // 5. Create Elements
     createStarfield();
+    createShootingStars();
 
     galaxyGroup = new THREE.Group();
     scene.add(galaxyGroup);
@@ -141,6 +151,54 @@ function createStarfield() {
 
     starfield = new THREE.Points(starGeometry, starMaterial);
     scene.add(starfield);
+}
+
+/* ===========================
+   SHOOTING STARS
+   =========================== */
+function createShootingStars() {
+    for (let i = 0; i < 5; i++) {
+        const points = [
+            new THREE.Vector3(0, 0, 0),
+            new THREE.Vector3(0, 0, -100) // Tail
+        ];
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+        const material = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 });
+        const line = new THREE.Line(geometry, material);
+
+        const star = {
+            mesh: line,
+            speed: 0,
+            delay: 0,
+            active: false,
+            direction: new THREE.Vector3()
+        };
+
+        resetShootingStar(star);
+        scene.add(line);
+        shootingStars.push(star);
+    }
+}
+
+function resetShootingStar(star) {
+    star.active = false;
+    star.delay = Math.random() * 4 + 1; // Wait 1 to 5 seconds
+
+    const x = (Math.random() - 0.5) * 3000;
+    const y = 500 + Math.random() * 1000;
+    const z = (Math.random() - 0.5) * 3000;
+    star.mesh.position.set(x, y, z);
+
+    star.direction.set(
+        (Math.random() - 0.5) * 2,
+        -1 - Math.random(),
+        (Math.random() - 0.5) * 2
+    ).normalize();
+
+    const target = new THREE.Vector3().copy(star.mesh.position).add(star.direction);
+    star.mesh.lookAt(target);
+
+    star.speed = Math.random() * 2000 + 1000; // 1000 to 3000 units per second
 }
 
 /* ===========================
@@ -405,8 +463,9 @@ function createTextRing() {
         ctx.textBaseline = 'middle';
 
         // Pinkish text glow
-        ctx.shadowColor = '#ff69b4';
+        ctx.shadowColor = '#ff1493';
         ctx.shadowBlur = 10;
+        ctx.fillStyle = '#ffffff';
         ctx.fillText(text, canvas.width / 2, canvas.height / 2);
 
         const texture = new THREE.CanvasTexture(canvas);
@@ -503,14 +562,28 @@ function onPointerMove(event) {
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
-    // Raycast for hover effects on photo bubbles
     raycaster.setFromCamera(mouse, camera);
     const intersects = raycaster.intersectObjects(photoBubbles, true);
 
     if (intersects.length > 0) {
         document.body.style.cursor = 'pointer';
+        const object = intersects[0].object;
+        if (hoveredBubble !== object) {
+            // Revert previous if any
+            if (hoveredBubble) {
+                gsap.to(hoveredBubble.scale, { x: 22, y: 22, z: 1, duration: 0.3 });
+            }
+            hoveredBubble = object;
+            gsap.to(hoveredBubble.scale, { x: 28.6, y: 28.6, z: 1, duration: 0.3 }); // Scale up by 1.3x
+            targetGlobalSpeedMult = 0.15; // Slow down galaxy rotation
+        }
     } else {
         document.body.style.cursor = 'default';
+        if (hoveredBubble) {
+            gsap.to(hoveredBubble.scale, { x: 22, y: 22, z: 1, duration: 0.3 });
+            hoveredBubble = null;
+            targetGlobalSpeedMult = 1.0; // Restore galaxy rotation speed
+        }
     }
 }
 
@@ -552,33 +625,49 @@ const clock = new THREE.Clock();
 
 function animate() {
     const elapsedTime = clock.getElapsedTime();
+    const deltaTime = elapsedTime - lastTime;
+    lastTime = elapsedTime;
 
     if (isWarping && starfield) {
         starfield.position.z += 100;
     }
 
+    // Update Shooting Stars
+    shootingStars.forEach(star => {
+        if (star.delay > 0) {
+            star.delay -= deltaTime;
+            if (star.delay <= 0) star.active = true;
+        } else if (star.active) {
+            star.mesh.position.addScaledVector(star.direction, star.speed * deltaTime);
+            if (star.mesh.position.y < -1000 || Math.abs(star.mesh.position.x) > 4000 || Math.abs(star.mesh.position.z) > 4000) {
+                resetShootingStar(star);
+            }
+        }
+    });
+
     if (isGalaxyVisible) {
+        globalSpeedMult += (targetGlobalSpeedMult - globalSpeedMult) * 0.1;
+
         // Slowly rotate entire galaxy plane
         if (galaxyGroup) {
-            galaxyGroup.rotation.y = elapsedTime * 0.03;
+            galaxyGroup.rotation.y += 0.003 * globalSpeedMult * deltaTime * 60; // Slowed down from 0.01
         }
 
         // Rotate the text ring continuously around the heart
         if (textRingGroup) {
-            // Negative rotation against the galaxy group to make it spin faster
-            textRingGroup.rotation.y = elapsedTime * -0.2;
+            textRingGroup.rotation.y += -0.005 * globalSpeedMult * deltaTime * 60; // Slowed down from -0.015
         }
 
         // Float heart up and down slightly around its new elevated position
         if (heartMesh) {
-            heartMesh.position.y = 55 + Math.sin(elapsedTime * 2) * 2;
-            heartMesh.rotation.y = elapsedTime * 0.5; // Spin on its axis
+            heartMesh.position.y = 55 + Math.sin(elapsedTime * 1) * 2; // Slower bob
+            heartMesh.rotation.y += 0.01 * globalSpeedMult * deltaTime * 60; // Slowed down from 0.03
         }
 
         // Orbit and bob photo bubbles around the middle section of the heart
         photoBubbles.forEach((sprite) => {
             // Update angle to orbit continuously at a slower, elegant speed
-            sprite.userData.angle += 0.001;
+            sprite.userData.angle += 0.00015 * globalSpeedMult * (deltaTime * 60); // Slowed down from 0.0004
 
             // Sinusoidal bob up and down
             const y = 45 + Math.sin(elapsedTime * 2 + sprite.userData.bobOffset) * 10;
