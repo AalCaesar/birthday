@@ -1,14 +1,17 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Galaxy Gallery</title>
+    <title>mini gift</title>
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Montserrat:wght@400;600&family=Dancing+Script:wght@400;700&display=swap"
+        rel="stylesheet">
 
     <!-- CSS -->
     <link rel="stylesheet" href="style.css">
@@ -26,6 +29,7 @@
         }
     </script>
 </head>
+
 <body>
 
     <!-- 3D Canvas Container -->
@@ -34,16 +38,17 @@
     <!-- Phase 1: Intro UI Overlay -->
     <div id="intro-overlay" class="overlay">
         <div class="glass-card">
-            <h1 class="title">Galaxy Gallery</h1>
-            
+            <h1 class="title">Happy Birthday</h1>
+
             <div class="image-placeholder">
                 <!-- Replace src with your actual bears GIF -->
-                <img src="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcGpmOXF1bHhwbHVyeTFnZHk0ZXZzZTcyM3ByYzRwZnNidjdyMnhkaiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Lpw1K9zETuh7KffjQX/giphy.gif" alt="Cute Bears GIF" class="bears-gif" onerror="this.src='photo1.jpg'">
+                <img src="https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHplbG9rejl1ZXJ2MWl6YXUxYjFsbWprMnNoejk5MHRsZWpnNnA1MSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/kZqbBT64ECtjy/giphy.gif"
+                    alt="Cute Bears GIF" class="bears-gif" onerror="this.src='photo1.jpg'">
             </div>
 
-            <p class="subtitle">PARA MI PRINCESITA</p>
+            <p class="subtitle">To my favorite person, happy birthday</p>
 
-            <button id="btn-iniciar" class="glow-button">INICIAR</button>
+            <button id="btn-iniciar" class="glow-button">mini gift</button>
         </div>
     </div>
 
@@ -58,7 +63,11 @@
         </div>
     </div>
 
+    <!-- Audio Background -->
+    <audio id="bgm" src="songs.mp3" loop></audio>
+
     <!-- Main JavaScript -->
     <script type="module" src="script.js"></script>
 </body>
+
 </html>

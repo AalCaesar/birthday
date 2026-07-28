@@ -1,3 +1,4 @@
+
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
@@ -5,7 +6,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
    GLOBALS & STATE
    =========================== */
 let scene, camera, renderer, controls;
-let starfield, galaxyGroup, accretionDisk, heartMesh;
+let starfield, galaxyGroup, centralPlanet, heartMesh;
 let textRingGroup, photoBubbles = [];
 let isWarping = false;
 let isGalaxyVisible = false;
@@ -14,9 +15,14 @@ let isGalaxyVisible = false;
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
+// Parallax globals
+let targetGalaxyRotationX = 0;
+let targetGalaxyRotationZ = 0;
+
 // DOM Elements
 const introOverlay = document.getElementById('intro-overlay');
 const btnIniciar = document.getElementById('btn-iniciar');
+const bgm = document.getElementById('bgm');
 
 // Modal Elements
 const modal = document.getElementById('image-modal');
@@ -42,7 +48,7 @@ function init() {
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setClearColor(0x050510, 1);
-    
+
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.2;
     container.appendChild(renderer.domElement);
@@ -59,29 +65,33 @@ function init() {
 
     // 5. Create Elements
     createStarfield();
-    
+
     galaxyGroup = new THREE.Group();
     scene.add(galaxyGroup);
-    
+
+    createCentralPlanet();
     createPlanetaryGalaxyPlane();
     createWireframeHeart();
     createTextRing();
     createPhotoBubbles();
-    
+
     // Hide galaxy elements initially
     galaxyGroup.visible = false;
 
     // 6. Event Listeners
     window.addEventListener('resize', onWindowResize);
     btnIniciar.addEventListener('click', startWarpSequence);
-    
-    // Raycaster events
+
+    // Pointer and Click events
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('click', onClick);
 
     // Modal close events
     btnCloseModal.addEventListener('click', closeModal);
     modalBackdrop.addEventListener('click', closeModal);
+
+    // Call once to ensure correct initial FOV and pixel ratio for the device
+    onWindowResize();
 
     // 7. Start Animation Loop
     renderer.setAnimationLoop(animate);
@@ -109,13 +119,13 @@ function createStarfield() {
         const z = (Math.random() - 0.5) * 6000;
 
         posArray[i] = radius * Math.cos(theta);
-        posArray[i+1] = radius * Math.sin(theta);
-        posArray[i+2] = z;
+        posArray[i + 1] = radius * Math.sin(theta);
+        posArray[i + 2] = z;
 
         const mixedColor = colors[Math.floor(Math.random() * colors.length)];
         colorArray[i] = mixedColor.r;
-        colorArray[i+1] = mixedColor.g;
-        colorArray[i+2] = mixedColor.b;
+        colorArray[i + 1] = mixedColor.g;
+        colorArray[i + 2] = mixedColor.b;
     }
 
     starGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
@@ -137,6 +147,11 @@ function createStarfield() {
    PHASE 2: WARP SEQUENCE
    =========================== */
 function startWarpSequence() {
+    // Play background music
+    if (bgm) {
+        bgm.play().catch(e => console.log("Audio play failed:", e));
+    }
+
     // UI Fades out
     gsap.to(introOverlay, {
         opacity: 0,
@@ -154,22 +169,27 @@ function startWarpSequence() {
             isWarping = false;
             isGalaxyVisible = true;
             controls.enabled = true; // User can now interact
-            
-            // Pop heart and bubbles in smoothly
-            gsap.fromTo(heartMesh.scale, 
-                { x: 0.01, y: 0.01, z: 0.01 }, 
-                { x: 3, y: 3, z: 3, duration: 2, ease: "elastic.out(1, 0.5)" }
+
+            // Pop planet, heart and bubbles in smoothly
+            gsap.fromTo(centralPlanet.scale,
+                { x: 0.01, y: 0.01, z: 0.01 },
+                { x: 1, y: 1, z: 1, duration: 2.5, ease: "elastic.out(1, 0.5)" }
             );
-            
+
+            gsap.fromTo(heartMesh.scale,
+                { x: 0.01, y: 0.01, z: 0.01 },
+                { x: 3, y: 3, z: 3, duration: 2, ease: "elastic.out(1, 0.5)", delay: 0.3 }
+            );
+
             gsap.fromTo(textRingGroup.scale,
                 { x: 0.01, y: 0.01, z: 0.01 },
-                { x: 1, y: 1, z: 1, duration: 1.5, ease: "power2.out", delay: 0.5 }
+                { x: 1, y: 1, z: 1, duration: 1.5, ease: "power2.out", delay: 0.8 }
             );
-            
+
             photoBubbles.forEach((bubble, i) => {
                 gsap.fromTo(bubble.scale,
-                    { x: 0, y: 0 },
-                    { x: 18, y: 18, duration: 1.2, ease: "back.out(1.5)", delay: 1 + (i * 0.2) }
+                    { x: 0.01, y: 0.01, z: 0.01 },
+                    { x: 22, y: 22, z: 1, duration: 1.2, ease: "back.out(1.5)", delay: 1.2 + (i * 0.2) }
                 );
             });
         }
@@ -179,7 +199,7 @@ function startWarpSequence() {
     tl.to(camera.position, {
         z: 0,
         duration: 2.5,
-        ease: "power2.in", 
+        ease: "power2.in",
     }, "start");
 
     tl.to(starfield.scale, {
@@ -195,7 +215,7 @@ function startWarpSequence() {
         duration: 2,
         ease: "power3.out"
     }, "start+=2.5");
-    
+
     tl.to(controls.target, {
         y: 0,
         duration: 2,
@@ -212,6 +232,26 @@ function startWarpSequence() {
 /* ===========================
    PHASE 3: PLANETARY GALAXY
    =========================== */
+function createCentralPlanet() {
+    // Sized to fit inside the inner radius (20) of the particle ring
+    const geometry = new THREE.SphereGeometry(14, 64, 64);
+
+    // Match the exact glowing pink/magenta color of the wireframe heart
+    const material = new THREE.MeshStandardMaterial({
+        color: 0xff1493,
+        emissive: 0xff1493,
+        emissiveIntensity: 0.8,
+        roughness: 0.2,
+        metalness: 0.1,
+        wireframe: false
+    });
+
+    centralPlanet = new THREE.Mesh(geometry, material);
+    centralPlanet.position.set(0, 0, 0);
+    centralPlanet.scale.set(0.01, 0.01, 0.01); // Hide initially
+
+    galaxyGroup.add(centralPlanet);
+}
 
 function createParticleTexture() {
     const canvas = document.createElement('canvas');
@@ -234,26 +274,26 @@ function createPlanetaryGalaxyPlane() {
     const positions = new Float32Array(count * 3);
     const colors = new Float32Array(count * 3);
 
-    const innerRadius = 20; // Clear center
+    const innerRadius = 20; // Clear center for the planet (14 radius)
     const outerRadius = 300;
-    
+
     const colorCore = new THREE.Color(0xff4488); // Pinkish core
     const colorMid = new THREE.Color(0x8822ff); // Purple mid
     const colorOuter = new THREE.Color(0x110044); // Dark blue outer
 
-    for(let i=0; i<count; i++) {
+    for (let i = 0; i < count; i++) {
         const i3 = i * 3;
-        
+
         // Logarithmic/Exponential distribution for dense core
         const r = innerRadius + Math.pow(Math.random(), 3) * (outerRadius - innerRadius);
         const theta = Math.random() * Math.PI * 2;
-        
+
         // Extremely flat Y axis (planetary ring)
         const y = (Math.random() - 0.5) * 3;
 
         positions[i3] = r * Math.cos(theta);
-        positions[i3+1] = y;
-        positions[i3+2] = r * Math.sin(theta);
+        positions[i3 + 1] = y;
+        positions[i3 + 2] = r * Math.sin(theta);
 
         // Color gradient based on radius
         let col = colorCore.clone();
@@ -262,15 +302,15 @@ function createPlanetaryGalaxyPlane() {
         } else {
             col = colorMid.clone().lerp(colorOuter, (r - 100) / (outerRadius - 100));
         }
-        
+
         // Sprinkle bright stardust
         if (Math.random() > 0.98) {
             col.setHex(0xffffff);
         }
 
         colors[i3] = col.r;
-        colors[i3+1] = col.g;
-        colors[i3+2] = col.b;
+        colors[i3 + 1] = col.g;
+        colors[i3 + 2] = col.b;
     }
 
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -294,34 +334,34 @@ function createWireframeHeart() {
     const heartShape = new THREE.Shape();
 
     // Mathematically draw a heart shape
-    heartShape.moveTo( x + 5, y + 5 );
-    heartShape.bezierCurveTo( x + 5, y + 5, x + 4, y, x, y );
-    heartShape.bezierCurveTo( x - 6, y, x - 6, y + 7,x - 6, y + 7 );
-    heartShape.bezierCurveTo( x - 6, y + 11, x - 3, y + 15.4, x + 5, y + 19 );
-    heartShape.bezierCurveTo( x + 12, y + 15.4, x + 16, y + 11, x + 16, y + 7 );
-    heartShape.bezierCurveTo( x + 16, y + 7, x + 16, y, x + 10, y );
-    heartShape.bezierCurveTo( x + 7, y, x + 5, y + 5, x + 5, y + 5 );
+    heartShape.moveTo(x + 5, y + 5);
+    heartShape.bezierCurveTo(x + 5, y + 5, x + 4, y, x, y);
+    heartShape.bezierCurveTo(x - 6, y, x - 6, y + 7, x - 6, y + 7);
+    heartShape.bezierCurveTo(x - 6, y + 11, x - 3, y + 15.4, x + 5, y + 19);
+    heartShape.bezierCurveTo(x + 12, y + 15.4, x + 16, y + 11, x + 16, y + 7);
+    heartShape.bezierCurveTo(x + 16, y + 7, x + 16, y, x + 10, y);
+    heartShape.bezierCurveTo(x + 7, y, x + 5, y + 5, x + 5, y + 5);
 
-    const extrudeSettings = { 
-        depth: 2, 
-        bevelEnabled: true, 
-        bevelSegments: 5, 
-        steps: 2, 
-        bevelSize: 1.5, 
-        bevelThickness: 1.5 
+    const extrudeSettings = {
+        depth: 2,
+        bevelEnabled: true,
+        bevelSegments: 5,
+        steps: 2,
+        bevelSize: 1.5,
+        bevelThickness: 1.5
     };
-    
-    const geometry = new THREE.ExtrudeGeometry( heartShape, extrudeSettings );
-    
+
+    const geometry = new THREE.ExtrudeGeometry(heartShape, extrudeSettings);
+
     // Center geometry exactly
     geometry.center();
-    
+
     // Rotate 180 deg on Z to make heart point down
     geometry.rotateZ(Math.PI);
 
     // Create wireframe edges for the glowing outline look
     const edges = new THREE.EdgesGeometry(geometry);
-    const material = new THREE.LineBasicMaterial({ 
+    const material = new THREE.LineBasicMaterial({
         color: 0xff1493, // Deep pink/magenta
         transparent: true,
         opacity: 0.9,
@@ -329,13 +369,13 @@ function createWireframeHeart() {
     });
 
     heartMesh = new THREE.LineSegments(edges, material);
-    
+
     // Position directly at absolute center (0, y, 0), hovering clearly above plane
     heartMesh.position.set(0, 55, 0);
     // Start scaled down (will pop in)
     heartMesh.scale.set(0.01, 0.01, 0.01);
 
-    galaxyGroup.add( heartMesh );
+    galaxyGroup.add(heartMesh);
 }
 
 /* ===========================
@@ -343,14 +383,14 @@ function createWireframeHeart() {
    =========================== */
 function createTextRing() {
     textRingGroup = new THREE.Group();
-    
+
     const texts = [
-        "MI CORAZÓN ES TUYO",
-        "CONTIGO SIEMPRE",
-        "INFINITO ∞",
-        "AMOR ETERNO"
+        "Happy Birthday",
+        "Love you",
+        "Infinite ∞",
+        "Proud of you"
     ];
-    
+
     const radius = 55; // Tight circular orbit around the heart
 
     texts.forEach((text, index) => {
@@ -358,34 +398,34 @@ function createTextRing() {
         const ctx = canvas.getContext('2d');
         canvas.width = 512;
         canvas.height = 128;
-        
+
         ctx.font = 'Bold 40px Montserrat, sans-serif';
         ctx.fillStyle = '#ffffff';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        
+
         // Pinkish text glow
         ctx.shadowColor = '#ff69b4';
         ctx.shadowBlur = 10;
         ctx.fillText(text, canvas.width / 2, canvas.height / 2);
 
         const texture = new THREE.CanvasTexture(canvas);
-        texture.minFilter = THREE.LinearFilter; 
-        
+        texture.minFilter = THREE.LinearFilter;
+
         const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
         const sprite = new THREE.Sprite(spriteMaterial);
-        
+
         sprite.scale.set(40, 10, 1);
-        
+
         const angle = (index / texts.length) * Math.PI * 2;
         const x = Math.cos(angle) * radius;
         const z = Math.sin(angle) * radius;
-        
+
         sprite.position.set(x, 45, z); // Orbit around the lower-middle of the heart
-        
+
         textRingGroup.add(sprite);
     });
-    
+
     galaxyGroup.add(textRingGroup);
 }
 
@@ -395,85 +435,63 @@ function createTextRing() {
 function createPhotoBubbles() {
     // Array of image URLs (placeholders for Flork memes / photos)
     const images = [
-        'photo1.jpg', // Placeholder 1
-        'photo2.jpg', // Placeholder 2
-        'photo3.jpg', // Placeholder 3
-        'photo4.jpg'  // Placeholder 4
+        'images/foto1.jpg', // Placeholder 1
+        'images/foto2.jpg', // Placeholder 2
+        'images/foto3.jpg', // Placeholder 3
+        'images/foto4.jpg'  // Placeholder 4
     ];
 
     const radius = 120; // Wider radius outside the text ring
+    const textureLoader = new THREE.TextureLoader();
+    textureLoader.setCrossOrigin("anonymous");
+
+    // Generate circular alpha map to crop square sprites into circles
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, 256, 256);
+    ctx.beginPath();
+    ctx.arc(128, 128, 120, 0, Math.PI * 2); // Slightly smaller to avoid edge artifacts
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    const alphaMap = new THREE.CanvasTexture(canvas);
 
     images.forEach((url, index) => {
-        const size = 256;
-        const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d');
-        
-        // Draw solid white circle (Sticker/Badge base)
-        ctx.beginPath();
-        ctx.arc(size/2, size/2, (size/2) - 4, 0, Math.PI * 2);
-        ctx.fillStyle = '#ffffff';
-        ctx.fill();
-        
-        ctx.lineWidth = 6;
-        ctx.strokeStyle = '#ff69b4'; // Pink border for romance
-        ctx.stroke();
+        const spriteMaterial = new THREE.SpriteMaterial({
+            color: 0xffffff, // White color so it doesn't tint the photo
+            alphaMap: alphaMap, // Masks the square image into a circle
+            transparent: true,
+            alphaTest: 0.1 // Ensure proper depth sorting
+        });
 
-        const texture = new THREE.CanvasTexture(canvas);
-        const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
-        const sprite = new THREE.Sprite(spriteMaterial);
-        
         if (url && url !== '') {
-            const img = new Image();
-            img.crossOrigin = "Anonymous";
-            img.onload = () => {
-                ctx.save();
-                ctx.beginPath();
-                ctx.arc(size/2, size/2, (size/2) - 10, 0, Math.PI * 2);
-                ctx.clip();
-                
-                const scale = Math.max(size / img.width, size / img.height);
-                const w = img.width * scale;
-                const h = img.height * scale;
-                const x = (size / 2) - (w / 2);
-                const y = (size / 2) - (h / 2);
-                
-                ctx.drawImage(img, x, y, w, h);
-                ctx.restore();
-                
-                texture.needsUpdate = true;
-            };
-            img.src = url;
-            // Store URL for raycaster modal
-            sprite.userData.url = url; 
-        } else {
-            // Draw placeholder icon
-            ctx.fillStyle = '#aaaaaa';
-            ctx.font = '40px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('PHOTO', size/2, size/2);
-            sprite.userData.url = null;
+            // PERBAIKAN: Langsung load 'url' (file lokal), hapus 'proxiedUrl'
+            textureLoader.load(url, (texture) => {
+                texture.colorSpace = THREE.SRGBColorSpace;
+                spriteMaterial.map = texture;
+                spriteMaterial.needsUpdate = true;
+            });
         }
-        
-        // Start scale at 0 for GSAP pop-in
-        sprite.scale.set(0, 0, 1);
-        
+
+        const sprite = new THREE.Sprite(spriteMaterial);
+
+        // Start scale at 0.01 for GSAP pop-in
+        sprite.scale.set(0.01, 0.01, 0.01);
+
         const angle = (index / images.length) * Math.PI * 2;
-        
-        sprite.userData.angle = angle;
-        sprite.userData.radius = radius;
-        sprite.userData.bobOffset = index; // Offset so they don't bob identically
-        
-        // Add specific flag to identify clickable photo bubbles
-        sprite.userData.isClickable = true;
+        sprite.userData = {
+            angle: angle,
+            radius: radius,
+            bobOffset: index,
+            url: url // Original URL for raycaster modal
+        };
 
         photoBubbles.push(sprite);
         galaxyGroup.add(sprite);
     });
 }
-
 /* ===========================
    RAYCASTER & MODAL LOGIC
    =========================== */
@@ -485,10 +503,9 @@ function onPointerMove(event) {
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
+    // Raycast for hover effects on photo bubbles
     raycaster.setFromCamera(mouse, camera);
-
-    // Calculate objects intersecting the picking ray
-    const intersects = raycaster.intersectObjects(photoBubbles);
+    const intersects = raycaster.intersectObjects(photoBubbles, true);
 
     if (intersects.length > 0) {
         document.body.style.cursor = 'pointer';
@@ -499,17 +516,17 @@ function onPointerMove(event) {
 
 function onClick(event) {
     if (!isGalaxyVisible) return;
-    
+
     // Ignore clicks if modal is already open
     if (!modal.classList.contains('hidden')) return;
 
     raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObjects(photoBubbles);
+    const intersects = raycaster.intersectObjects(photoBubbles, true);
 
     if (intersects.length > 0) {
-        const clickedSprite = intersects[0].object;
-        if (clickedSprite.userData.url) {
-            openModal(clickedSprite.userData.url);
+        const clickedObject = intersects[0].object;
+        if (clickedObject.userData.url) {
+            openModal(clickedObject.userData.url);
         }
     }
 }
@@ -537,7 +554,7 @@ function animate() {
     const elapsedTime = clock.getElapsedTime();
 
     if (isWarping && starfield) {
-        starfield.position.z += 100; 
+        starfield.position.z += 100;
     }
 
     if (isGalaxyVisible) {
@@ -549,7 +566,7 @@ function animate() {
         // Rotate the text ring continuously around the heart
         if (textRingGroup) {
             // Negative rotation against the galaxy group to make it spin faster
-            textRingGroup.rotation.y = elapsedTime * -0.2; 
+            textRingGroup.rotation.y = elapsedTime * -0.2;
         }
 
         // Float heart up and down slightly around its new elevated position
@@ -560,12 +577,15 @@ function animate() {
 
         // Orbit and bob photo bubbles around the middle section of the heart
         photoBubbles.forEach((sprite) => {
+            // Update angle to orbit continuously at a slower, elegant speed
+            sprite.userData.angle += 0.001;
+
             // Sinusoidal bob up and down
-            const y = 45 + Math.sin(elapsedTime * 2 + sprite.userData.bobOffset) * 10; 
-            
+            const y = 45 + Math.sin(elapsedTime * 2 + sprite.userData.bobOffset) * 10;
+
             const x = Math.cos(sprite.userData.angle) * sprite.userData.radius;
             const z = Math.sin(sprite.userData.angle) * sprite.userData.radius;
-            
+
             sprite.position.set(x, y, z);
         });
     }
@@ -578,9 +598,17 @@ function animate() {
    UTILITIES
    =========================== */
 function onWindowResize() {
+    // Mobile responsiveness: widen FOV to fit the galaxy on narrow screens
+    if (window.innerWidth < 768) {
+        camera.fov = 90;
+    } else {
+        camera.fov = 60;
+    }
+
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 }
 
 init();
